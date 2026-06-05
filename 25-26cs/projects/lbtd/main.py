@@ -163,7 +163,8 @@ def buymenu(): # buy menu function
     # title
     pyprint("Buy Menu", (SIZE[0] // 2) - 50, scaly + 100, "large", BLACK) # bigger text
     pyprint(f"Level {levelstate}", (SIZE[0] // 2) - 30, scaly + 150, "small", BLACK) # smaller text
-    pyprint("Press space to start level.\nPrices are not charged until tower is placed.", 15, 20, "small", WHITE) # useful info for the user 
+    pyprint("Press space to start level. | Press S to sell tower.\nPrices are not charged until tower is placed.", 15, 20, "small", WHITE) # useful info for the user 
+    pyprint(f"${str(money)}", (SIZE[0] / 2), 440 + scaly, "small", YELLOW) # current balance
 
     if not affordable: # an error message from the last failed purchase
         pyprint("Insufficient funds for the purchase!", (SIZE[0] / 2) - 225, 650, "small", RED) # 2 line breaks to be placed below the above text
@@ -212,9 +213,13 @@ def level(map): # function for the actual level to be played
         if towerheld is None: # check if a tower is not at hand
             buymenu() # show the menu for the user to pick
 
+        elif towerheld == -1: # if the user is selling
+            pyprint(f"Selling tower", 400, 315, "small", RED) # selling info
+            pyprint(f"Press escape to cancel.", 360, 355, "small", RED) # instructions
+
         else: # otherwise the user is working with a tower
-            pyprint(f"Placing Tower {towerheld}", 400, 315, "small", RED) # Display the tower held
-            pyprint(f"Press escape to cancel.", 360, 355, "small", RED) # Instructions
+            pyprint(f"Placing Tower {towerheld}", 400, 315, "small", RED) # display the tower held
+            pyprint(f"Press escape to cancel.", 360, 355, "small", RED) # instructions
 
             # making the cursor have a tower be following it, so the user can visually see the tower coming
             xpos, ypos = p.mouse.get_pos() # get the mouse position into 2 variables
@@ -314,9 +319,13 @@ while True: # forever
                     s.exit() # exit the program
 
     else: # otherwise (if the user didn't press play the levelstate will remain 0)
+        global money # need access to globally change money to give refunds
         level(levelstate) # start the level
 
         for i in pyevents: # open a new event loop
+            if i.type == p.KEYDOWN and i.key == p.K_s: # check if the user is pressing the sell key (S)
+                towerheld = -1 # set the tower being held to a special position to sell
+
             if i.type == p.MOUSEBUTTONDOWN and i.button == 1: # check if left mouse clicked
                 pos = i.pos # get mouse position
 
@@ -341,12 +350,29 @@ while True: # forever
                         elif tower3rect.collidepoint(pos):
                             towerheld = 3
 
+                    elif towerheld == -1: # check if the user just wants to sell something
+                        levelplots = maps[levelstate]["plots"] # grab plots for the current level
+                        sold = False # create a value to leave the loop later when the plot is sold
+
+                        for j in levelplots: # loop through plots
+                            if j.collidepoint(pos): # check if it was clicked on
+                                for k in towers: # loop through active towers
+                                    if k["rect"] == j: # check if there's a rectangle object there
+                                        money += ((k["type"] * 10) // 4) * 3 # refund 75%
+                                        towers.remove(k) # remove the tower
+                                        sold = True # will allow the other loop to be left
+                                        break # leave the loop
+
+                            if sold:
+                                towerheld = None # leave this state
+                                break # break the loop
+
                     else: # otherwise, the user is buying and holding
                         levelplots = maps[levelstate]["plots"] # grab plots for the current level
 
-                        for i in levelplots: # loop through plots
-                            if i.collidepoint(pos): # if any of the plots are clicked on
-                                taken = any(j["rect"] == i for j in towers) # if anything is present in the current plot, put it into this variable
+                        for j in levelplots: # loop through plots
+                            if j.collidepoint(pos): # if any of the plots are clicked on
+                                taken = any(k["rect"] == j for k in towers) # if anything is present in the current plot, put it into this variable
 
                                 if not taken: # check if the above variable is not what we're clicking on
                                     price = towerheld * 10 # dynamically make the price of the tower being placed
@@ -355,7 +381,7 @@ while True: # forever
                                     if affordable: # check if the user can afford the tower
                                         towers.append({ # add a dictionary
                                             "type": towerheld, # type
-                                            "rect": i # the rectangle object
+                                            "rect": j # the rectangle object
                                         }) 
 
                                         money -= price # subtract the price
@@ -367,5 +393,3 @@ while True: # forever
 
     p.display.flip() # update
     clock.tick(FPS) # framerate
-
-
