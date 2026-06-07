@@ -11,21 +11,23 @@ p.init() # initialize pygame
 # global variables
 SIZE = (1000, 700) # screen size (taken from assignment)
 FPS = 60 # frame rate
-FONT = "JetBrainsMono Nerd Font" # choosing the system font
+FONT = "./assets/jbm.ttf" # choosing the font file
 BLUE, RED, GREEN, YELLOW, WHITE, ORANGE, BLACK = (0, 0, 255), (255, 0, 0), (0, 255, 0), (255, 255, 0), (255, 255, 255), (255, 165, 0), (0, 0, 0) # all colours
 
 # function variables
 screen = p.display.set_mode(SIZE) # setting mode to size variable
 clock = p.time.Clock() # enforce frame rate
 levelstate = 0 # menu by default
+diedb4 = False # used by the menu, which does not take the level resetting into acconut
+gamebeaten = False # same as above
 
 p.display.set_caption("Last Bastion TD") # window title
 
 # asset loading, we want it done before a loop so we don't have it reloading so often
 assets = { # make a dictionary
     # fonts
-    "large": p.font.SysFont(FONT, 32), # large font
-    "small": p.font.SysFont(FONT, 24), # small font
+    "large": p.font.Font(FONT, 32), # large font
+    "small": p.font.Font(FONT, 24), # small font
 
     # menu specific images
     "menubg": p.transform.scale(p.image.load("./assets/menu/menubg.jpg").convert(), (SIZE[0], SIZE[1])), # menu background
@@ -38,11 +40,16 @@ assets = { # make a dictionary
     "TWR3": p.image.load("./assets/towers/t1/t1l3.png").convert_alpha(),
 }
 
+# our towers are png images, and we rely on transparency so we need to make sure the invisible pixels don't count
+assets["TWR1mask"] = p.mask.from_surface(assets["TWR1"])
+assets["TWR2mask"] = p.mask.from_surface(assets["TWR2"])
+assets["TWR3mask"] = p.mask.from_surface(assets["TWR3"])
+
 maps = { # maps dict
     1: { # level 1
         "bgimg": p.image.load("./assets/bg/bg1.png").convert_alpha(), # the background of the level
         "startmoney": 100, # the money the player starts with
-        "enemystart": (200, 0), # starting positon for the enemies
+        "enemystart": (200, 0), # starting position for the enemies
         "towerstart": (800, 700), # start position for the tower
         "corners": [(200, 145), (805, 145), (805, 350), (195, 350), (195, 555), (805, 555), (805, 800)], # the corners the enemies move toward
         "plots": [ # rectangles where the user can press to place towers
@@ -74,15 +81,23 @@ maps = { # maps dict
 }
 
 class enemy: # make a class for enemies
-    def __init__(self, hp, speed, level, damage): # function to run at the start of the class
+    def __init__(self, hp, speed, level, damage, colour = RED): # function to run at the start of the class
         self.xpos = maps[level]["enemystart"][0] # grabbing the info
         self.ypos = maps[level]["enemystart"][1] # second position is y
         self.exists = True # alive or not?
         self.hp = hp # given when the enemy is created
         self.speed = speed # given speed
         self.cornerindex = 0 # index for the enemy's position in the list of corners
-        self.orangetimer = 0 # track the amount of frames the enemy should be orange for
         self.damage = damage # given damage
+        self.size = 60 # the size to be drawn at
+        self.colour = colour # use the default red or the specified
+
+        enemysurface = p.Surface((self.size, self.size)) # make it an object
+        enemysurface.fill(WHITE) # allow the surface to be hit
+        self.mask = p.mask.from_surface(enemysurface) # put the mask into its own variable
+
+    def getrect(self): # function to return a rectangle object to check collision
+        return p.Rect(self.xpos - (self.size / 2), self.ypos - (self.size / 2), self.size, self.size) # dynamically pass coordinates
 
     def right(self, left = False): # function to move left/right
         if left: # if the user wants to go left
@@ -100,16 +115,20 @@ class enemy: # make a class for enemies
 
     def die(self, damage): # function to take damage
         self.hp -= damage # reduce it from the hp
-        self.orangetimer = 15 # orange for 15 frames
+        self.orangetimer = 1 # orange for 1 frames
 
         if self.hp <= 0: # check if there's no HP, also checking for less than 0 in the case of a negative
             self.exists = False # the enemy no longer exists
+
+            global money # access the global money variable
+
+            money += self.speed # make the user some money if they managed to eliminate the enemy
 
 def pyprint(text, x, y, size, colour = WHITE): # function to print quicker, with parameters
     screen.blit(assets[size].render(text, True, colour), (x, y)) # fixed colour, background is black to overwrite old text
 
 def levelreset(): # function to reset the global variables if the user replays
-    global levelsetup, enemies, levelhp, buying, towerheld, towers, money, affordable
+    global levelsetup, enemies, levelhp, buying, towerheld, towers, money, affordable, diedb4, spawntimer, enemiesalive, wavestate, enemyconfigs, waveenemies, gamebeaten # allow global reset
 
     levelsetup = False # one timers
     enemies = [] # object list to store which enemies are alive
@@ -119,6 +138,13 @@ def levelreset(): # function to reset the global variables if the user replays
     towerheld = None # which tower is the user placing? None means they're not holding tower 1 or 2
     money = maps[levelstate]["startmoney"] # put the current level's starting amount into the balance
     affordable = True # prevent the error message first
+    diedb4 = False # prevent another error message
+    spawntimer = 0 # timer based spawning system for enemies
+    enemiesalive = 10 # total enemies that will spawn
+    wavestate = 1 # start at the first wave
+    enemyconfigs = [] # list of dictionaries to remember what types of enemies are alive
+    waveenemies = 0 # tracker for the amount of enemies in the current wave
+    gamebeaten = False # if the user is playing, the game wasn't beaten
 
 # buttons
 def menubutton(text, yplus, yscale): # make a function to modularize the process
@@ -147,6 +173,11 @@ def menu(): # menu function
     pyprint("Last Bastion", (SIZE[0] // 2) - 100, scaly + 100, "large", BLACK) # bigger text
     pyprint("Tower Defense", (SIZE[0] // 2) - 80, scaly + 150, "small", BLACK) # smaller text
 
+    if diedb4: # an error message from the last failed purchase
+        pyprint("You died! Pick an option to continue.", (SIZE[0] / 2) - 235, 650, "small", RED) # bottom middle of the screen 
+    elif gamebeaten: # winner's message
+        pyprint("You won! Pick an option to continue.", (SIZE[0] / 2) - 235, 650, "small", GREEN) # green success
+
     playbutton = menubutton("Play", 250, scaly) # play button
     infobutton = menubutton("Info", 310, scaly) # info button
     quitbutton = menubutton("Quit", 370, scaly) # quit button
@@ -162,7 +193,7 @@ def buymenu(): # buy menu function
 
     # title
     pyprint("Buy Menu", (SIZE[0] // 2) - 50, scaly + 100, "large", BLACK) # bigger text
-    pyprint(f"Level {levelstate}", (SIZE[0] // 2) - 30, scaly + 150, "small", BLACK) # smaller text
+    pyprint(f"Level {levelstate} | Wave {wavestate}", (SIZE[0] // 2) - 100, scaly + 150, "small", BLACK) # smaller text
     pyprint("Press space to start level. | Press S to sell tower.\nPrices are not charged until tower is placed.", 15, 20, "small", WHITE) # useful info for the user 
     pyprint(f"${str(money)}", (SIZE[0] / 2), 440 + scaly, "small", YELLOW) # current balance
 
@@ -181,7 +212,7 @@ def buymenu(): # buy menu function
 
 
 def level(map): # function for the actual level to be played
-    global levelsetup, levelhp, buying # allow the variable changes to leave the function
+    global levelsetup, levelhp, buying, spawntimer, enemiesalive, wavestate, enemyconfigs, waveenemies, buying, levelstate, enemies, levelstate, gamebeaten, affordable # global variables that will be changed
 
     currentlevel = maps[map] # place the info for only this level into a variable
 
@@ -237,10 +268,65 @@ def level(map): # function for the actual level to be played
             towerheld = None # go back to the buy menu
 
     else: # otherwise play the game
-        if not levelsetup: # if everything isn't set already
-            enemies.append(enemy(100, 5, map, 25)) # make an enemy and add it to the list
-            levelsetup = True # there's no need to run again
-            enemycolour = RED # set the colour of the enemy
+        if not levelsetup: # one time run
+            enemyconfigs = [] # empty the configurations
+
+            if wavestate >= 1: # for the first wave, wave 2 and 3 will also use these enemies
+                for i in range(10): # 10 base enemies
+                    enemyconfigs.append({
+                        "hp": 100,
+                        "speed": 5, 
+                        "damage": 10,
+                        "colour": RED
+                    })
+
+            if wavestate >= 2: # for the second wave, wave 3 will also use these enemies
+                for i in range(5): # 5 extra enemies
+                    enemyconfigs.append({
+                        "hp": 150,
+                        "speed": 10, 
+                        "damage": 15,
+                        "colour": BLUE
+                        })
+
+            if wavestate == 3: # for the last wave, no other waves exist after so this can be hard capped
+                for i in range(5): # last 5 enemies
+                    enemyconfigs.append({
+                        "hp": 200,
+                        "speed": 15, 
+                        "damage": 20,
+                        "colour": BLACK
+                    })
+
+            waveenemies = len(enemyconfigs) # grab the amount of enemies to spawn
+            levelsetup = True # leave this state
+            spawntimer = 0 # allow the first enemy to be spawned
+
+        if len(enemyconfigs) > 0: # if there's any enemies to spawn
+            if spawntimer <= 0: # if the spawn timer runs out
+                spawnenemy = enemyconfigs.pop(0) # grab the latest enemy's config to spawn
+                enemies.append(enemy(spawnenemy["hp"], spawnenemy["speed"], map, spawnenemy["damage"], spawnenemy["colour"]))
+                spawntimer = 45 # reset the spawn timer
+            else:
+                spawntimer -= 1 # otherwise keep counting
+
+        enemiesarealive = any(i.exists for i in enemies) # check if anyone is alive
+
+        if len(enemyconfigs) == 0 and not enemiesarealive: # if there's no more enemies to spawn and no enemies exist
+            if wavestate < 3: # if the user isn't at the final wave
+                wavestate += 1 # move up a wave
+                towerheld = None # leave any buying state the user was in
+                affordable = True # remove any error message
+                buying = True # next buying phase
+                levelsetup = False # require the level to be setup again
+                enemies = [] # clear all the dead enemies
+            else:
+                if (levelstate + 1) in maps: # if the next level exists
+                    levelstate += 1 # move to it
+                    levelreset() # reset variables
+                else:
+                    gamebeaten = True # for the winning text on the next menu
+                    levelstate = 0 # back to menu
 
         for i in enemies: # going through every enemy alive
             if i.exists: # check if the enemy object exists
@@ -250,8 +336,9 @@ def level(map): # function for the actual level to be played
                     levelhp -= i.damage # apply damage
 
                     if levelhp <= 0: # if the user dies
-                        global levelstate # globally modify the level state variable
+                        global diedb4 # globally modify the diedb4 variable
 
+                        diedb4 = True # the user has died, so the error message will print when the user returns to the menu
                         levelstate = 0 # put the level back to the menu
 
                     continue # no need to keep going in the loop on this enemy
@@ -281,16 +368,28 @@ def level(map): # function for the actual level to be played
                 else: # otherwise move to the next corner
                     i.cornerindex += 1; # move to the next
 
-                enemycolour = RED # red by default
+                enemyrect = i.getrect() # grabbing the object
+                workingondying = False # variable to check if the enemy is being hit by a tower
 
-                if i.orangetimer > 0: # the die function will make the orangetimer 15, so this will become true
-                    enemycolour = ORANGE # if the die function has been called, make the enemy orange
+                for j in towers: # loop through towers
+                    towermask = assets[f"TWR{j['type']}mask"] # dynamically grab the tower mask from the dictionary
+                    towerimage = assets[f"TWR{j['type']}"] # dynamically grab the tower image from the dictionary
+                    towerrect = towerimage.get_rect(center=j["rect"].center) # grab the tower image as a rectangle
 
-                    i.orangetimer -= 1 # count down on the timer, this conditonal statement won't be true in 15 frames
+                    # calculating the distance between the x and y points of the enemy and the tower
+                    xoffset = enemyrect.x - towerrect.x
+                    yoffset = enemyrect.y - towerrect.y
 
-                enemysize = 60 # size of the enemy
+                    if towermask.overlap(i.mask, (xoffset, yoffset)): # check for the contact
+                        i.die(0.75) # 0.75 hp gone per contact
+                        workingondying = True # state that the user is being hit
 
-                p.draw.rect(screen, enemycolour, ((i.xpos) - (enemysize / 2), (i.ypos) - (enemysize / 2), enemysize, enemysize), border_radius = 5) # draw the enemy
+                if workingondying: # if the user is taking damage
+                    enemycolour = ORANGE # make the colour orange to indicate damage being taken
+                else:
+                    enemycolour = i.colour # take the default colour
+
+                p.draw.rect(screen, enemycolour, ((i.xpos) - (i.size / 2), (i.ypos) - (i.size / 2), i.size, i.size), border_radius = 5) # draw the enemy
 
 while True: # forever
     pyevents = p.event.get() # easier name for game events
@@ -313,6 +412,7 @@ while True: # forever
 
                 elif inforect.collidepoint(pos): # if the info button is pressed
                     print("Info button clicked!") # debug info
+                    # levelstate -= 1 # go to a special -1 state for the information screen
 
                 elif quitrect.collidepoint(pos): # if the quit button is pressed
                     p.quit() # quit pygame
@@ -365,6 +465,7 @@ while True: # forever
 
                             if sold:
                                 towerheld = None # leave this state
+                                affordable = True # just to remove the error, even if they still can't afford it
                                 break # break the loop
 
                     else: # otherwise, the user is buying and holding
