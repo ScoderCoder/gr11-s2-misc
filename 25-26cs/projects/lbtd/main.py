@@ -7,6 +7,7 @@ import pygame as p # import and shorten the pygame library
 import sys as s # import and shorten the system library
 
 p.init() # initialize pygame
+p.mixer.init() # initialize the pygame mixer for audio
 
 # global variables
 SIZE = (1000, 700) # screen size (taken from assignment)
@@ -34,10 +35,19 @@ assets = { # make a dictionary
     "buymenubg": p.transform.scale(p.image.load("./assets/menu/buymenubg.png").convert(), (SIZE[0], SIZE[1])), # buy menu background
     "menubanner": p.image.load("./assets/menu/banner.png").convert_alpha(), # menu banner
 
-    # towers
+    # tower pngs
     "TWR1": p.image.load("./assets/towers/t1/t1l1.png").convert_alpha(),
     "TWR2": p.image.load("./assets/towers/t1/t1l2.png").convert_alpha(),
     "TWR3": p.image.load("./assets/towers/t1/t1l3.png").convert_alpha(),
+
+    "sfx": { # sound effects
+          "button": p.mixer.Sound("./assets/sfx/button.wav"), # button press
+          "die": p.mixer.Sound("./assets/sfx/die.wav"), # enemy dies
+          "won": p.mixer.Sound("./assets/sfx/won.wav"), # user beats a level
+          "lost": p.mixer.Sound("./assets/sfx/lost.wav"), # user fails to beat a level
+          "sell": p.mixer.Sound("./assets/sfx/sell.wav"), # user sells a tower 
+          "place": p.mixer.Sound("./assets/sfx/place.wav") # user places a tower 
+    }
 }
 
 # our towers are png images, and we rely on transparency so we need to make sure the invisible pixels don't count
@@ -49,6 +59,7 @@ maps = { # maps dict
     1: { # level 1
         "bgimg": p.image.load("./assets/bg/bg1.png").convert_alpha(), # the background of the level
         "startmoney": 100, # the money the player starts with
+        "starthp": 100, # the health the player starts with
         "enemystart": (200, 0), # starting position for the enemies
         "towerstart": (800, 700), # start position for the tower
         "corners": [(200, 145), (805, 145), (805, 350), (195, 350), (195, 555), (805, 555), (805, 800)], # the corners the enemies move toward
@@ -78,6 +89,62 @@ maps = { # maps dict
             p.Rect(600, 625, 130, 60),
         ]
     },
+
+    2: { # level 2
+        "bgimg": p.image.load("./assets/bg/bg2.png").convert_alpha(), # the background of the level
+        "startmoney": 100, # the money the player starts with
+        "starthp": 75, # the health the player starts with
+        "enemystart": (0, 145), # starting position for the enemies
+        "towerstart": (800, 700), # start position for the tower
+        "corners": [(195, 145), (195, 555), (810, 555), (810, 350), (415, 350), (415, 145), (1000, 145)], # the corners the enemies move toward
+        "plots": [ # rectangles where the user can press to place towers
+            # top row
+            p.Rect(115, 20, 130, 60),
+            p.Rect(355, 20, 130, 60),
+            p.Rect(500, 20, 130, 60),
+            p.Rect(650, 20, 130, 60),
+            p.Rect(790, 20, 130, 60),
+
+            # second row
+            p.Rect(500, 215, 130, 60),
+            p.Rect(650, 215, 130, 60),
+            p.Rect(790, 215, 130, 60),
+
+            # third row
+            p.Rect(280, 423, 130, 60),
+            p.Rect(425, 423, 130, 60),
+            p.Rect(570, 423, 130, 60),
+
+            # last row
+            p.Rect(150, 625, 130, 60),
+            p.Rect(295, 625, 130, 60),
+            p.Rect(440, 625, 130, 60),
+            p.Rect(585, 625, 130, 60),
+            p.Rect(730, 625, 130, 60),
+        ]
+    },
+
+    3: { # level 3
+        "bgimg": p.image.load("./assets/bg/bg3.png").convert_alpha(), # the background of the level
+        "startmoney": 100, # the money the player starts with
+        "starthp": 50, # the health the player starts with
+        "enemystart": (0, 555), # starting position for the enemies
+        "towerstart": (800, 700), # start position for the tower
+        "corners": [(185, 555), (185, 145), (400, 145), (400, 550), (613, 550), (613, 145), (825, 145), (825, 700)], # the corners the enemies move toward
+        "plots": [ # rectangles where the user can press to place towers
+            # top row
+            p.Rect(135, 10, 130, 60),
+            p.Rect(285, 10, 130, 60),
+            p.Rect(435, 10, 130, 60),
+            p.Rect(585, 10, 130, 60),
+            p.Rect(735, 10, 130, 60),
+
+            # last row
+            p.Rect(110, 620, 130, 60),
+            p.Rect(370, 620, 130, 60),
+            p.Rect(520, 620, 130, 60),
+        ]
+    }
 }
 
 class enemy: # make a class for enemies
@@ -119,9 +186,9 @@ class enemy: # make a class for enemies
 
         if self.hp <= 0: # check if there's no HP, also checking for less than 0 in the case of a negative
             self.exists = False # the enemy no longer exists
+            assets["sfx"]["die"].play() # enemy die sound
 
             global money # access the global money variable
-
             money += self.speed # make the user some money if they managed to eliminate the enemy
 
 def pyprint(text, x, y, size, colour = WHITE): # function to print quicker, with parameters
@@ -132,7 +199,7 @@ def levelreset(): # function to reset the global variables if the user replays
 
     levelsetup = False # one timers
     enemies = [] # object list to store which enemies are alive
-    levelhp = 100 # start the level's HP
+    levelhp = maps[levelstate]["starthp"] # start the level's HP
     buying = True # start the user buying
     towers = [] # the towers placed
     towerheld = None # which tower is the user placing? None means they're not holding tower 1 or 2
@@ -230,14 +297,6 @@ def level(map): # function for the actual level to be played
     pyprint(f"HP: {str(levelhp)}", 15, 20, "small", WHITE) # convert the hp integer into a displayable string
     pyprint(f"${str(money)}", 15, 50, "small", YELLOW) # convert the money integer into a displayable string
 
-    # DEBUG -----
-    #for i in pyevents: 
-    #    if i.type == p.MOUSEBUTTONDOWN and i.button == 1: 
-    #        pos = i.pos 
-    #
-    #        print(pos)
-    # ----- DEBUG
-
     if buying: # check if the user is in the buy phase
         global towerheld # allow use everywhere
 
@@ -323,9 +382,11 @@ def level(map): # function for the actual level to be played
             else:
                 if (levelstate + 1) in maps: # if the next level exists
                     levelstate += 1 # move to it
+                    assets["sfx"]["won"].play() # user beat level sound
                     levelreset() # reset variables
                 else:
                     gamebeaten = True # for the winning text on the next menu
+                    assets["sfx"]["won"].play() # user beat level sound
                     levelstate = 0 # back to menu
 
         for i in enemies: # going through every enemy alive
@@ -339,6 +400,7 @@ def level(map): # function for the actual level to be played
                         global diedb4 # globally modify the diedb4 variable
 
                         diedb4 = True # the user has died, so the error message will print when the user returns to the menu
+                        assets["sfx"]["lost"].play() # user fail level sound
                         levelstate = 0 # put the level back to the menu
 
                     continue # no need to keep going in the loop on this enemy
@@ -381,7 +443,11 @@ def level(map): # function for the actual level to be played
                     yoffset = enemyrect.y - towerrect.y
 
                     if towermask.overlap(i.mask, (xoffset, yoffset)): # check for the contact
-                        i.die(0.75) # 0.75 hp gone per contact
+                        if levelstate == 3: # check if the user is at level 3
+                            i.die(1.5) # double the damage since level 3 has less placement spots
+                        else: # otherwise normal damage
+                            i.die(0.75) # 0.75 hp gone per contact
+
                         workingondying = True # state that the user is being hit
 
                 if workingondying: # if the user is taking damage
@@ -407,14 +473,17 @@ while True: # forever
                 pos = i.pos # get mouse position
 
                 if playrect.collidepoint(pos): # if the play button is pressed
+                    assets["sfx"]["button"].play() # button press sound
                     levelstate += 1 # add one to the level
                     levelreset() # fresh variables
 
                 elif inforect.collidepoint(pos): # if the info button is pressed
+                    assets["sfx"]["button"].play() # button press sound
                     print("Info button clicked!") # debug info
                     # levelstate -= 1 # go to a special -1 state for the information screen
 
                 elif quitrect.collidepoint(pos): # if the quit button is pressed
+                    assets["sfx"]["button"].play() # button press sound
                     p.quit() # quit pygame
                     s.exit() # exit the program
 
@@ -442,12 +511,15 @@ while True: # forever
 
                         # check the buttons, then assign it to my state variable
                         if tower1rect.collidepoint(pos):
+                            assets["sfx"]["button"].play() # button press sound
                             towerheld = 1 
 
                         elif tower2rect.collidepoint(pos):
+                            assets["sfx"]["button"].play() # button press sound
                             towerheld = 2
 
                         elif tower3rect.collidepoint(pos):
+                            assets["sfx"]["button"].play() # button press sound
                             towerheld = 3
 
                     elif towerheld == -1: # check if the user just wants to sell something
@@ -460,6 +532,7 @@ while True: # forever
                                     if k["rect"] == j: # check if there's a rectangle object there
                                         money += ((k["type"] * 10) // 4) * 3 # refund 75%
                                         towers.remove(k) # remove the tower
+                                        assets["sfx"]["sell"].play() # tower sell sound
                                         sold = True # will allow the other loop to be left
                                         break # leave the loop
 
@@ -486,6 +559,7 @@ while True: # forever
                                         }) 
 
                                         money -= price # subtract the price
+                                        assets["sfx"]["place"].play() # tower place sound
 
                                     towerheld = None # leave this state
                                     break # leave the loop
