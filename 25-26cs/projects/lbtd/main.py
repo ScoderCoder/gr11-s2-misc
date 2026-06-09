@@ -61,7 +61,6 @@ maps = { # maps dict
         "startmoney": 100, # the money the player starts with
         "starthp": 100, # the health the player starts with
         "enemystart": (200, 0), # starting position for the enemies
-        "towerstart": (800, 700), # start position for the tower
         "corners": [(200, 145), (805, 145), (805, 350), (195, 350), (195, 555), (805, 555), (805, 800)], # the corners the enemies move toward
         "plots": [ # rectangles where the user can press to place towers
             # top row
@@ -74,7 +73,7 @@ maps = { # maps dict
             p.Rect(160, 220, 130, 60),
             p.Rect(305, 220, 130, 60),
             p.Rect(450, 220, 130, 60),
-            p.Rect(600, 220, 130, 60),
+            p.Rect(595, 220, 130, 60),
 
             # third row
             p.Rect(275, 425, 130, 60),
@@ -95,7 +94,6 @@ maps = { # maps dict
         "startmoney": 100, # the money the player starts with
         "starthp": 75, # the health the player starts with
         "enemystart": (0, 145), # starting position for the enemies
-        "towerstart": (800, 700), # start position for the tower
         "corners": [(195, 145), (195, 555), (810, 555), (810, 350), (415, 350), (415, 145), (1000, 145)], # the corners the enemies move toward
         "plots": [ # rectangles where the user can press to place towers
             # top row
@@ -129,7 +127,6 @@ maps = { # maps dict
         "startmoney": 100, # the money the player starts with
         "starthp": 50, # the health the player starts with
         "enemystart": (0, 555), # starting position for the enemies
-        "towerstart": (800, 700), # start position for the tower
         "corners": [(185, 555), (185, 145), (400, 145), (400, 550), (613, 550), (613, 145), (825, 145), (825, 700)], # the corners the enemies move toward
         "plots": [ # rectangles where the user can press to place towers
             # top row
@@ -148,7 +145,7 @@ maps = { # maps dict
 }
 
 class enemy: # make a class for enemies
-    def __init__(self, hp, speed, level, damage, colour = RED): # function to run at the start of the class
+    def __init__(self, hp, speed, level, damage, colour = RED, size = 60): # function to run at the start of the class
         self.xpos = maps[level]["enemystart"][0] # grabbing the info
         self.ypos = maps[level]["enemystart"][1] # second position is y
         self.exists = True # alive or not?
@@ -156,7 +153,7 @@ class enemy: # make a class for enemies
         self.speed = speed # given speed
         self.cornerindex = 0 # index for the enemy's position in the list of corners
         self.damage = damage # given damage
-        self.size = 60 # the size to be drawn at
+        self.size = size # the size to be drawn at
         self.colour = colour # use the default red or the specified
 
         enemysurface = p.Surface((self.size, self.size)) # make it an object
@@ -182,7 +179,6 @@ class enemy: # make a class for enemies
 
     def die(self, damage): # function to take damage
         self.hp -= damage # reduce it from the hp
-        self.orangetimer = 1 # orange for 1 frames
 
         if self.hp <= 0: # check if there's no HP, also checking for less than 0 in the case of a negative
             self.exists = False # the enemy no longer exists
@@ -195,7 +191,7 @@ def pyprint(text, x, y, size, colour = WHITE): # function to print quicker, with
     screen.blit(assets[size].render(text, True, colour), (x, y)) # fixed colour, background is black to overwrite old text
 
 def levelreset(): # function to reset the global variables if the user replays
-    global levelsetup, enemies, levelhp, buying, towerheld, towers, money, affordable, diedb4, spawntimer, enemiesalive, wavestate, enemyconfigs, waveenemies, gamebeaten # allow global reset
+    global levelsetup, enemies, levelhp, buying, towerheld, towers, money, affordable, diedb4, spawntimer, wavestate, enemyconfigs, gamebeaten # allow global reset
 
     levelsetup = False # one timers
     enemies = [] # object list to store which enemies are alive
@@ -207,30 +203,31 @@ def levelreset(): # function to reset the global variables if the user replays
     affordable = True # prevent the error message first
     diedb4 = False # prevent another error message
     spawntimer = 0 # timer based spawning system for enemies
-    enemiesalive = 10 # total enemies that will spawn
     wavestate = 1 # start at the first wave
     enemyconfigs = [] # list of dictionaries to remember what types of enemies are alive
-    waveenemies = 0 # tracker for the amount of enemies in the current wave
     gamebeaten = False # if the user is playing, the game wasn't beaten
 
 # buttons
-def menubutton(text, yplus, yscale): # make a function to modularize the process
+def menubutton(text, yplus, yscale, cords=None): # make a function to modularize the process
     if len(text) < 5: # the box won't fit if the string is longer than 4 characters
         buttonobj = p.Rect((SIZE[0] // 2) - 30, yscale + yplus, 100, 50) # using the rectangle object
-
-        p.draw.rect(screen, WHITE, buttonobj, 2) # place a border around it
 
     else:
         buttonobj = p.Rect((SIZE[0] // 2) - 30, yscale + yplus, 120, 50) # using the rectangle object
 
-        p.draw.rect(screen, WHITE, buttonobj, 2) # place a border around it
+    bordercolour = WHITE # by default have white borders
 
+    if cords and buttonobj.collidepoint(cords): # if hovering over the object
+        bordercolour = ORANGE # make the border orange
+
+    p.draw.rect(screen, bordercolour, buttonobj, 2) # place a border around it
     pyprint(text, (SIZE[0] // 2) - 20, yscale + yplus, "large") # draw the button    
 
     return buttonobj # give the object back to check for clicks
 
 def menu(): # menu function
     scaly = 100 # base y
+    cords = p.mouse.get_pos() # grab mouse position
 
     # background & title banner
     screen.blit(assets["menubg"], (0, 0)) # load the jpg background 
@@ -245,14 +242,30 @@ def menu(): # menu function
     elif gamebeaten: # winner's message
         pyprint("You won! Pick an option to continue.", (SIZE[0] / 2) - 235, 650, "small", GREEN) # green success
 
-    playbutton = menubutton("Play", 250, scaly) # play button
-    infobutton = menubutton("Info", 310, scaly) # info button
-    quitbutton = menubutton("Quit", 370, scaly) # quit button
+    playbutton = menubutton("Play", 250, scaly, cords) # play button
+    infobutton = menubutton("Info", 310, scaly, cords) # info button
+    quitbutton = menubutton("Quit", 370, scaly, cords) # quit button
 
     return playbutton, infobutton, quitbutton # have them be returned to be accessed by the event loop
 
+def infomenu(): # information menu function
+    screen.blit(assets["menubg"], (0, 0)) # same menu as the background
+    pyprint(f"Information ({page + 1})", (SIZE[0] / 2) - 125, 75, "large", WHITE) # print the information page header
+    pyprint("Menu (Esc) | Previous (<) | Next (>)", 475, 20, "small", YELLOW) # keybinding info 
+
+    # page-specific content
+    if page == 0: # 0 is first
+        pyprint("Write something", 400, 150, "small", WHITE)
+
+    elif page == 1:
+        pyprint("Write something 2", 400, 150, "small", WHITE)
+
+    elif page == 2:
+        pyprint("Write something 3", 400, 150, "small", WHITE)
+
 def buymenu(): # buy menu function
     scaly = 100 # base y
+    cords = p.mouse.get_pos() # grab mouse position
 
     # background & title banner
     screen.blit(assets["buymenubg"], (0, 0)) # load the png background 
@@ -261,25 +274,25 @@ def buymenu(): # buy menu function
     # title
     pyprint("Buy Menu", (SIZE[0] // 2) - 50, scaly + 100, "large", BLACK) # bigger text
     pyprint(f"Level {levelstate} | Wave {wavestate}", (SIZE[0] // 2) - 100, scaly + 150, "small", BLACK) # smaller text
-    pyprint("Press space to start level. | Press S to sell tower.\nPrices are not charged until tower is placed.", 15, 20, "small", WHITE) # useful info for the user 
+    pyprint("Press space to start level.\nPrices are not charged until tower is placed.", 15, 20, "small", WHITE) # useful info for the user 
+    pyprint("Upgrade (U) | Sell (S)", 675, 20, "small", YELLOW) # keybinding info 
     pyprint(f"${str(money)}", (SIZE[0] / 2), 440 + scaly, "small", YELLOW) # current balance
 
     if not affordable: # an error message from the last failed purchase
         pyprint("Insufficient funds for the purchase!", (SIZE[0] / 2) - 225, 650, "small", RED) # 2 line breaks to be placed below the above text
 
     # the 3 levels of towers
-    tower1button = menubutton("TWR 1", 250, scaly) # first tower
+    tower1button = menubutton("TWR 1", 250, scaly, cords) # first tower
     pyprint("$10", 600, 255 + scaly, "small", GREEN) # price 1
-    tower2button = menubutton("TWR 2", 310, scaly) # second tower
+    tower2button = menubutton("TWR 2", 310, scaly, cords) # second tower
     pyprint("$20", 600, 315 + scaly, "small", GREEN) # price 2
-    tower3button = menubutton("TWR 3", 370, scaly) # third tower
+    tower3button = menubutton("TWR 3", 370, scaly, cords) # third tower
     pyprint("$30", 600, 375 + scaly, "small", GREEN) # price 3
 
     return tower1button, tower2button, tower3button # have them be returned to be accessed by the event loop
 
-
 def level(map): # function for the actual level to be played
-    global levelsetup, levelhp, buying, spawntimer, enemiesalive, wavestate, enemyconfigs, waveenemies, buying, levelstate, enemies, levelstate, gamebeaten, affordable # global variables that will be changed
+    global levelsetup, levelhp, buying, spawntimer, wavestate, enemyconfigs, levelstate, enemies, gamebeaten, affordable # global variables that will be changed
 
     currentlevel = maps[map] # place the info for only this level into a variable
 
@@ -307,6 +320,10 @@ def level(map): # function for the actual level to be played
             pyprint(f"Selling tower", 400, 315, "small", RED) # selling info
             pyprint(f"Press escape to cancel.", 360, 355, "small", RED) # instructions
 
+        elif towerheld == -2: # if the user is selling
+            pyprint(f"Upgrading tower ($10)", 370, 315, "small", RED) # selling info
+            pyprint(f"Press escape to cancel.", 360, 355, "small", RED) # instructions
+
         else: # otherwise the user is working with a tower
             pyprint(f"Placing Tower {towerheld}", 400, 315, "small", RED) # display the tower held
             pyprint(f"Press escape to cancel.", 360, 355, "small", RED) # instructions
@@ -318,14 +335,6 @@ def level(map): # function for the actual level to be played
 
             screen.blit(followimg, followrect) # image, position
 
-        key = p.key.get_pressed() # keypresses
-
-        if key[p.K_SPACE]: # if the user presses space
-            buying = False # leave the buy menu
-
-        if key[p.K_ESCAPE]: # if the user presses escape
-            towerheld = None # go back to the buy menu
-
     else: # otherwise play the game
         if not levelsetup: # one time run
             enemyconfigs = [] # empty the configurations
@@ -336,7 +345,8 @@ def level(map): # function for the actual level to be played
                         "hp": 100,
                         "speed": 5, 
                         "damage": 10,
-                        "colour": RED
+                        "colour": RED,
+                        "size": 40
                     })
 
             if wavestate >= 2: # for the second wave, wave 3 will also use these enemies
@@ -345,8 +355,9 @@ def level(map): # function for the actual level to be played
                         "hp": 150,
                         "speed": 10, 
                         "damage": 15,
-                        "colour": BLUE
-                        })
+                        "colour": BLUE,
+                        "size": 50
+                    })
 
             if wavestate == 3: # for the last wave, no other waves exist after so this can be hard capped
                 for i in range(5): # last 5 enemies
@@ -354,17 +365,17 @@ def level(map): # function for the actual level to be played
                         "hp": 200,
                         "speed": 15, 
                         "damage": 20,
-                        "colour": BLACK
+                        "colour": BLACK,
+                        "size": 60
                     })
 
-            waveenemies = len(enemyconfigs) # grab the amount of enemies to spawn
             levelsetup = True # leave this state
             spawntimer = 0 # allow the first enemy to be spawned
 
         if len(enemyconfigs) > 0: # if there's any enemies to spawn
             if spawntimer <= 0: # if the spawn timer runs out
                 spawnenemy = enemyconfigs.pop(0) # grab the latest enemy's config to spawn
-                enemies.append(enemy(spawnenemy["hp"], spawnenemy["speed"], map, spawnenemy["damage"], spawnenemy["colour"]))
+                enemies.append(enemy(spawnenemy["hp"], spawnenemy["speed"], map, spawnenemy["damage"], spawnenemy["colour"], spawnenemy["size"]))
                 spawntimer = 45 # reset the spawn timer
             else:
                 spawntimer -= 1 # otherwise keep counting
@@ -479,29 +490,60 @@ while True: # forever
 
                 elif inforect.collidepoint(pos): # if the info button is pressed
                     assets["sfx"]["button"].play() # button press sound
-                    print("Info button clicked!") # debug info
-                    # levelstate -= 1 # go to a special -1 state for the information screen
+                    page = 0 # start the info screen on the first page
+                    levelstate -= 1 # go to a special -1 state for the information screen
 
                 elif quitrect.collidepoint(pos): # if the quit button is pressed
                     assets["sfx"]["button"].play() # button press sound
                     p.quit() # quit pygame
                     s.exit() # exit the program
 
+    elif levelstate == -1: # special case for the information screen
+        infomenu()
+
+        for i in pyevents: # new event loop
+            if i.type == p.KEYDOWN: # check for keyboard keypresses
+                if i.key == p.K_ESCAPE: # check for escape
+                    assets["sfx"]["button"].play() # button press sound
+                    levelstate = 0 # return to the menu
+
+                elif i.key == p.K_RIGHT: # check for right arrow key
+                    if page < 2: # if the user isn't on the last page
+                        assets["sfx"]["button"].play() # button press sound
+                        page += 1 # go to the next page
+
+                elif i.key == p.K_LEFT: # check for left arrow key
+                    if page > 0: # if the user isn't on the first page
+                        assets["sfx"]["button"].play() # button press sound
+                        page -= 1 # go to the previous page
+
     else: # otherwise (if the user didn't press play the levelstate will remain 0)
-        global money # need access to globally change money to give refunds
         level(levelstate) # start the level
 
         for i in pyevents: # open a new event loop
-            if i.type == p.KEYDOWN and i.key == p.K_s: # check if the user is pressing the sell key (S)
-                towerheld = -1 # set the tower being held to a special position to sell
 
+            if i.type == p.KEYDOWN:
+                if i.key == p.K_SPACE: # if the user presses space
+                    assets["sfx"]["button"].play() # button press sound
+                    buying = False # leave the buy menu
+
+                elif i.key == p.K_ESCAPE: # if the user presses escape
+                    assets["sfx"]["button"].play() # button press sound
+                    towerheld = None # go back to the buy menu
+
+                elif i.key == p.K_s: # check if the user is pressing the sell key (S)
+                    assets["sfx"]["button"].play() # button press sound
+                    towerheld = -1 # set the tower being held to a special position to sell
+
+                elif i.key == p.K_u: # check if the user is pressing the upgrade key (U)
+                    assets["sfx"]["button"].play() # button press sound
+                    towerheld = -2 # set the tower being held to a special position to upgrade
+                        
             if i.type == p.MOUSEBUTTONDOWN and i.button == 1: # check if left mouse clicked
                 pos = i.pos # get mouse position
 
                 if buying: # in the buy menu
                     if towerheld is None: # if isn't already placing a tower
-                        global price # allow global price usage
-
                         scaly = 100 # bring back this variable from before
 
                         # redefine the hitboxes generated by the button function
@@ -540,6 +582,33 @@ while True: # forever
                                 towerheld = None # leave this state
                                 affordable = True # just to remove the error, even if they still can't afford it
                                 break # break the loop
+
+                    elif towerheld == -2: # check if the user wants to upgrade a tower
+                        levelplots = maps[levelstate]["plots"] # grab plots for the current level
+                        upgraded = False # create a value to leave the loop later when the tower is upgraded
+
+                        for j in levelplots: # loop through plots
+                            if j.collidepoint(pos): # check if a plot is clicked
+                                for k in towers: # loop through the active towers
+                                    if k["rect"] == j and k["type"] < 3: # check for a rectangle object and its towerheld variable when it was placed
+                                        price = 10 # it costs $10 to go up a stage
+
+                                        if money >= price: # if the user can afford to upgrade
+                                            money -= price # charge the upgrade cost
+
+                                            k["type"] += 1 # upgrade the tower
+                                            assets["sfx"]["place"].play() # placement sfx
+                                            affordable = True # suppress error
+
+                                        else:
+                                            affordable = False # old error
+
+                                        upgraded = True # upgraded state
+                                        break # leave the loop
+
+                            if upgraded: # if the user is done buying
+                                towerheld = None # back to the buy menu
+                                break # leave
 
                     else: # otherwise, the user is buying and holding
                         levelplots = maps[levelstate]["plots"] # grab plots for the current level
