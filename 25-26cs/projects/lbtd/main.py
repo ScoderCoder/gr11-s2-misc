@@ -188,7 +188,7 @@ class enemy: # make a class for enemies
             money += self.speed # make the user some money if they managed to eliminate the enemy
 
 def pyprint(text, x, y, size, colour = WHITE): # function to print quicker, with parameters
-    screen.blit(assets[size].render(text, True, colour), (x, y)) # fixed colour, background is black to overwrite old text
+    screen.blit(assets[size].render(text, True, colour, None, 800), (x, y)) # fixed colour, background is black to overwrite old text
 
 def levelreset(): # function to reset the global variables if the user replays
     global levelsetup, enemies, levelhp, buying, towerheld, towers, money, affordable, diedb4, spawntimer, wavestate, enemyconfigs, gamebeaten # allow global reset
@@ -250,18 +250,18 @@ def menu(): # menu function
 
 def infomenu(): # information menu function
     screen.blit(assets["menubg"], (0, 0)) # same menu as the background
-    pyprint(f"Information ({page + 1})", (SIZE[0] / 2) - 125, 75, "large", WHITE) # print the information page header
+    pyprint(f"Information ({page + 1}/3)", (SIZE[0] / 2) - 130, 75, "large", WHITE) # print the information page header
     pyprint("Menu (Esc) | Previous (<) | Next (>)", 475, 20, "small", YELLOW) # keybinding info 
 
     # page-specific content
     if page == 0: # 0 is first
-        pyprint("Write something", 400, 150, "small", WHITE)
+        pyprint("Last Bastion is a laser tower defense game where you place laser towers in order to damage enemies as they pass through the map. Your goal is to ultimately protect the red base from losing all HP.\n\nIt is up to you, the player to decide which towers to buy and where to place them!", 100, 150, "small", WHITE)
 
     elif page == 1:
-        pyprint("Write something 2", 400, 150, "small", WHITE)
+        pyprint("The game consists of 3 different levels. Each level contains 3 waves of enemies. The notable differences include:\n\nLevel 1: 100 HP\nLevel 2: 75 HP\nLevel 3: 50 HP\n\nWave 1: 10 red enemies\nWave 2: previous enemies + 5 blue enemies\nWave 3: previous enemies + 5 black enemies\n\nAs a result of having less plots, level 3 towers deal double damage!", 100, 150, "small", WHITE)
 
     elif page == 2:
-        pyprint("Write something 3", 400, 150, "small", WHITE)
+        pyprint("Enemy difficulty varies by colour. The notable differences include:\n\nRed: 100 HP, 10 damage, 5 speed, 40 size\nBlue: 150 HP, 15 damage, 10 speed, 50 size\nBlack: 200 HP, 20 damage, 10 speed, 60 size\n\nTowers also come in 3 levels. Towers can be bought, upgraded or sold during the buy phase. Each upgrade offers an additonal laser. Selling a tower refunds 75% of its original value.", 100, 150, "small", WHITE)
 
 def buymenu(): # buy menu function
     scaly = 100 # base y
@@ -275,8 +275,12 @@ def buymenu(): # buy menu function
     pyprint("Buy Menu", (SIZE[0] // 2) - 50, scaly + 100, "large", BLACK) # bigger text
     pyprint(f"Level {levelstate} | Wave {wavestate}", (SIZE[0] // 2) - 100, scaly + 150, "small", BLACK) # smaller text
     pyprint("Press space to start level.\nPrices are not charged until tower is placed.", 15, 20, "small", WHITE) # useful info for the user 
-    pyprint("Upgrade (U) | Sell (S)", 675, 20, "small", YELLOW) # keybinding info 
     pyprint(f"${str(money)}", (SIZE[0] / 2), 440 + scaly, "small", YELLOW) # current balance
+
+    if towerheld is None and buying and levelstate == 1 and wavestate == 1: # same condition as the escape keybinding
+        pyprint("Menu (Esc) | Upgrade (U) | Sell (S)", 493, 20, "small", YELLOW) # extra info to leave the screen 
+    else:
+        pyprint("Upgrade (U) | Sell (S)", 675, 20, "small", YELLOW) # keybinding info 
 
     if not affordable: # an error message from the last failed purchase
         pyprint("Insufficient funds for the purchase!", (SIZE[0] / 2) - 225, 650, "small", RED) # 2 line breaks to be placed below the above text
@@ -529,7 +533,11 @@ while True: # forever
 
                 elif i.key == p.K_ESCAPE: # if the user presses escape
                     assets["sfx"]["button"].play() # button press sound
-                    towerheld = None # go back to the buy menu
+                    
+                    if towerheld is None and buying and levelstate == 1 and wavestate == 1: # if the user is on the first level and wave and is in the buy menu
+                        levelstate = 0 # return to the main menu
+                    else: # otherwise the user is buying, selling or upgrading and needs to return to the buy menu
+                        towerheld = None # go back to the buy menu
 
                 elif i.key == p.K_s: # check if the user is pressing the sell key (S)
                     assets["sfx"]["button"].play() # button press sound
