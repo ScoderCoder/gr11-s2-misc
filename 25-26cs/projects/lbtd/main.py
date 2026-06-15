@@ -19,7 +19,7 @@ BLUE, RED, GREEN, YELLOW, WHITE, ORANGE, BLACK = (0, 0, 255), (255, 0, 0), (0, 2
 screen = p.display.set_mode(SIZE) # setting mode to size variable
 clock = p.time.Clock() # enforce frame rate
 levelstate = 0 # menu by default
-diedb4 = False # used by the menu, which does not take the level resetting into acconut
+diedb4 = False # used by the menu, which does not take the level resetting into account
 gamebeaten = False # same as above
 
 p.display.set_caption("Last Bastion TD") # window title
